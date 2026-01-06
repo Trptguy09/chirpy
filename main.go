@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -8,6 +9,15 @@ import (
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+}
+type ChirpRequest struct {
+	Body string `json:"body"`
+}
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+type ValidResponse struct {
+	Valid bool `json:"valid"`
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -42,6 +52,36 @@ func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (cfg *apiConfig) validate_chirp(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	defer r.Body.Close()
+
+	var req ChirpRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error: "Something went wrong",
+		})
+		return
+	}
+
+	if len(req.Body) > 140 {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error: "Chirp is too long",
+		})
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ValidResponse{
+		Valid: true,
+	})
+}
+
 func main() {
 	apiCfg := &apiConfig{}
 	serverMux := http.NewServeMux()
@@ -51,6 +91,7 @@ func main() {
 	serverMux.HandleFunc("GET /api/healthz", apiCfg.healthz)
 	serverMux.HandleFunc("GET /admin/metrics", apiCfg.metrics)
 	serverMux.HandleFunc("POST /admin/reset", apiCfg.reset)
+	serverMux.HandleFunc("POST /api/validate_chirp", apiCfg.validate_chirp)
 
 	srv := http.Server{
 		Addr:    ":8080",
