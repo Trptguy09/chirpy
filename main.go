@@ -10,13 +10,15 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 }
-type ChirpRequest struct {
+type inParams struct {
 	Body string `json:"body"`
 }
-type ErrorResponse struct {
+
+type errorResp struct {
 	Error string `json:"error"`
 }
-type ValidResponse struct {
+
+type validResp struct {
 	Valid bool `json:"valid"`
 }
 
@@ -53,33 +55,44 @@ func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) validate_chirp(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
 
-	defer r.Body.Close()
-
-	var req ChirpRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{
+	decoder := json.NewDecoder(r.Body)
+	params := inParams{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(500)
+		resp, err := json.Marshal(errorResp{
 			Error: "Something went wrong",
 		})
+		if err != nil {
+			return
+		}
+		w.Write(resp)
 		return
 	}
-
-	if len(req.Body) > 140 {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{
+	const maxChirpLength = 140
+	if len(params.Body) > maxChirpLength {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(400)
+		resp, err := json.Marshal(errorResp{
 			Error: "Chirp is too long",
 		})
+		if err != nil {
+			return
+		}
+		w.Write(resp)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(ValidResponse{
+	resp, err := json.Marshal(validResp{
 		Valid: true,
 	})
+	if err != nil {
+		return
+	}
+	w.Write(resp)
 }
 
 func main() {
