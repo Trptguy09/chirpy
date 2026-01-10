@@ -17,6 +17,7 @@ type User struct {
 	HashedPassword string    `json:"-"`
 	Email          string    `json:"email"`
 	Token          string    `json:"token"`
+	RefreshToken   string    `json:"refresh_token"`
 }
 
 func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
