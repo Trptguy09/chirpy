@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -51,9 +52,17 @@ ON users.id = refresh_tokens.user_id
 WHERE token = $1 AND revoked_at IS NULL AND expires_at > NOW()
 `
 
-func (q *Queries) GetUserByRefreshToken(ctx context.Context, token string) (User, error) {
+type GetUserByRefreshTokenRow struct {
+	ID             uuid.UUID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Email          string
+	HashedPassword string
+}
+
+func (q *Queries) GetUserByRefreshToken(ctx context.Context, token string) (GetUserByRefreshTokenRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByRefreshToken, token)
-	var i User
+	var i GetUserByRefreshTokenRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
