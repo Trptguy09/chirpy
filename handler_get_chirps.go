@@ -4,19 +4,36 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"sort"
 
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	var respChirps []chirpResponse
+	var authorID uuid.UUID
+	var err error
+
 	chirps, err := cfg.db.RetriveChirps(r.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldnt retrive chirps", err)
 		return
 	}
-	var respChirps []chirpResponse
+
+	a := r.URL.Query().Get("author_id")
+	if a != "" {
+		authorID, err = uuid.Parse(a)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "unable to parse author_id", err)
+			return
+		}
+	}
 
 	for _, c := range chirps {
+
+		if authorID != uuid.Nil && authorID != c.UserID {
+			continue
+		}
 		respChirps = append(respChirps,
 			chirpResponse{
 				ID:        c.ID,
@@ -25,6 +42,17 @@ func (cfg *apiConfig) handlerGetAllChirps(w http.ResponseWriter, r *http.Request
 				Body:      c.Body,
 				UserID:    c.UserID,
 			})
+	}
+	s := r.URL.Query().Get("sort")
+	if s == "asc" || s == "" {
+		sort.Slice(respChirps, func(i, j int) bool {
+			return respChirps[i].CreatedAt.Before(respChirps[j].CreatedAt)
+		})
+	}
+	if s == "desc" {
+		sort.Slice(respChirps, func(i, j int) bool {
+			return respChirps[i].CreatedAt.After(respChirps[j].CreatedAt)
+		})
 	}
 	respondWithJSON(w, http.StatusOK, respChirps)
 }

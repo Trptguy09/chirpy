@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chirpy/internal/auth"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -9,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (cfg *apiConfig) handlerUserUpgradeToChirpyRed(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerPolkaWebhook(w http.ResponseWriter, r *http.Request) {
 
 	type response struct {
 		User
@@ -23,7 +24,6 @@ func (cfg *apiConfig) handlerUserUpgradeToChirpyRed(w http.ResponseWriter, r *ht
 		Event string `json:"event"`
 		Data  data   `json:"data"`
 	}
-
 	decoder := json.NewDecoder(r.Body)
 	params := outerRequest{}
 	err := decoder.Decode(&params)
@@ -31,6 +31,17 @@ func (cfg *apiConfig) handlerUserUpgradeToChirpyRed(w http.ResponseWriter, r *ht
 		respondWithError(w, http.StatusBadRequest, "Couldn't decode parameters", err)
 		return
 	}
+
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "unable to retrieve api key", err)
+		return
+	}
+	if apiKey != cfg.polka_key {
+		respondWithError(w, http.StatusUnauthorized, "apikey does not match", nil)
+		return
+	}
+
 	if params.Event != "user.upgraded" {
 		w.WriteHeader(http.StatusNoContent)
 		return
